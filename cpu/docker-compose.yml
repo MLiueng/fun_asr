@@ -1,0 +1,34 @@
+services:
+  fun-asr-cpu:
+    image: fun-asr-server-cpu:latest
+    container_name: fun-asr-server-cpu
+    ports:
+      - "${PORT:-9000}:9000"
+    environment:
+      - MODELSCOPE_CACHE=/app/models
+      - MODELSCOPE_MODULES_CACHE=/app/models
+      # 离线部署：阻止 ModelScope / HuggingFace 联网下载
+      - MODELSCOPE_OFFLINE=1
+      - HF_HUB_OFFLINE=1
+      - TRANSFORMERS_OFFLINE=1
+    volumes:
+      # 模型文件挂载（ModelScope 需要写 .lock 文件，不能用只读）
+      - ./models:/app/models
+      # 离线启动脚本：猴子补丁拦截 AutoModel / ModelScope 联网请求
+      - ./entrypoint.py:/app/entrypoint.py:ro
+    entrypoint: ["python", "/app/entrypoint.py"]
+    command:
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "9000"
+      - "--device"
+      - "cpu"
+      - "--preload"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
